@@ -3,9 +3,9 @@ name: Build Basic SOC Drills
 on:
   push:
     branches: [main]
-    tags: ["v*"]
   pull_request:
     branches: [main]
+  workflow_dispatch:   # adds a "Run workflow" button on the Actions tab
 
 jobs:
   # Runs on every push/PR: just proves the code imports and compiles cleanly.
@@ -23,10 +23,11 @@ jobs:
       - name: Import check
         run: python -c "import soc_drills.gui, soc_drills.backend, soc_drills.console, soc_drills.theme"
 
-  # Only runs when you push a tag like "v1.0.0" - builds a standalone
-  # executable per OS with PyInstaller and attaches them to a GitHub Release.
+  # Builds a standalone executable per OS with PyInstaller and uploads each
+  # as a workflow artifact (Actions tab -> this run -> Artifacts section).
+  # No GitHub Release is created - trigger manually with "Run workflow" or
+  # let it ride along on every push/PR.
   build:
-    if: startsWith(github.ref, 'refs/tags/v')
     needs: check
     strategy:
       matrix:
@@ -65,8 +66,4 @@ jobs:
         with:
           name: ${{ matrix.asset_name }}
           path: dist/${{ matrix.asset_name }}
-
-      - name: Attach to GitHub Release
-        uses: softprops/action-gh-release@v2
-        with:
-          files: dist/${{ matrix.asset_name }}
+          retention-days: 30
