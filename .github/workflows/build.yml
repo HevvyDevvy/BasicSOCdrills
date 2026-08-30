@@ -1,0 +1,72 @@
+name: Build Basic SOC Drills
+
+on:
+  push:
+    branches: [main]
+    tags: ["v*"]
+  pull_request:
+    branches: [main]
+
+jobs:
+  # Runs on every push/PR: just proves the code imports and compiles cleanly.
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Install Tk (needed to import tkinter)
+        run: sudo apt-get update && sudo apt-get install -y python3-tk
+      - name: Byte-compile
+        run: python -m py_compile app.py soc_drills/*.py
+      - name: Import check
+        run: python -c "import soc_drills.gui, soc_drills.backend, soc_drills.console, soc_drills.theme"
+
+  # Only runs when you push a tag like "v1.0.0" - builds a standalone
+  # executable per OS with PyInstaller and attaches them to a GitHub Release.
+  build:
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: check
+    strategy:
+      matrix:
+        include:
+          - os: ubuntu-latest
+            asset_name: BasicSOCDrills-linux
+          - os: windows-latest
+            asset_name: BasicSOCDrills-windows.exe
+          - os: macos-latest
+            asset_name: BasicSOCDrills-macos
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install Tk (Linux only - Windows/macOS Python already bundles it)
+        if: runner.os == 'Linux'
+        run: sudo apt-get update && sudo apt-get install -y python3-tk
+
+      - name: Install PyInstaller
+        run: pip install pyinstaller
+
+      - name: Build executable
+        run: pyinstaller --onefile --name BasicSOCDrills app.py
+
+      - name: Rename artifact (Windows)
+        if: runner.os == 'Windows'
+        run: mv dist/BasicSOCDrills.exe dist/${{ matrix.asset_name }}
+      - name: Rename artifact (Linux/macOS)
+        if: runner.os != 'Windows'
+        run: mv dist/BasicSOCDrills dist/${{ matrix.asset_name }}
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.asset_name }}
+          path: dist/${{ matrix.asset_name }}
+
+      - name: Attach to GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: dist/${{ matrix.asset_name }}
